@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "410158710230",
+    "project_id": "smartflow-hrms",
+    "storage_bucket": "smartflow-hrms.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:410158710230:android:11a28b1d20948253b77877",
+        "android_client_info": {
+          "package_name": "com.felicitysolar.hrm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA_bBz1x9KNONXwTdf3JMBamJjA2-CTn80"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
