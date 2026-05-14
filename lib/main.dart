@@ -6,6 +6,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 // 👇 GLOBALS
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -102,10 +103,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
     late final PlatformWebViewControllerCreationParams params;
 
     if (WebViewPlatform.instance is AndroidWebViewPlatform) {
-      params = AndroidWebViewControllerCreationParams();
-    } else {
-      params = const PlatformWebViewControllerCreationParams();
-    }
+  params = AndroidWebViewControllerCreationParams();
+} else {
+  params = WebKitWebViewControllerCreationParams(
+    allowsInlineMediaPlayback: true,
+    mediaTypesRequiringUserAction: const <PlaybackMediaTypes>{},
+  );
+}
 
     controller = WebViewController.fromPlatformCreationParams(params)
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
