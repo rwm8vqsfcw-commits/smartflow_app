@@ -1,18 +1,15 @@
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
-// 👇 GLOBALS
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-FlutterLocalNotificationsPlugin();
+    FlutterLocalNotificationsPlugin();
 
-late WebViewController globalController;
+late InAppWebViewController globalController;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,17 +17,22 @@ void main() async {
   await Firebase.initializeApp();
 
   const AndroidInitializationSettings initializationSettingsAndroid =
-  AndroidInitializationSettings('@mipmap/ic_launcher');
+      AndroidInitializationSettings('@mipmap/ic_launcher');
 
   const InitializationSettings initializationSettings =
-  InitializationSettings(android: initializationSettingsAndroid);
+      InitializationSettings(
+    android: initializationSettingsAndroid,
+  );
 
   await flutterLocalNotificationsPlugin.initialize(
     initializationSettings,
-    onDidReceiveNotificationResponse: (NotificationResponse response) {
+    onDidReceiveNotificationResponse:
+        (NotificationResponse response) async {
       if (response.payload != null) {
-        globalController.loadRequest(
-          Uri.parse(response.payload!),
+        globalController.loadUrl(
+          urlRequest: URLRequest(
+            url: WebUri(response.payload!),
+          ),
         );
       }
     },
@@ -51,41 +53,45 @@ class MyApp extends StatelessWidget {
 
 class WebViewScreen extends StatefulWidget {
   @override
-  _WebViewScreenState createState() => _WebViewScreenState();
+  State<WebViewScreen> createState() => _WebViewScreenState();
 }
 
 class _WebViewScreenState extends State<WebViewScreen> {
-  late final WebViewController controller;
+  InAppWebViewController? controller;
+
+  @override
+  void initState() {
+    super.initState();
+
+    requestLocationPermission();
+
+    initFirebase();
+  }
 
   Future<void> requestLocationPermission() async {
     var status = await Permission.location.request();
 
-    if (status.isGranted) {
-      print("📍 Location permission granted");
-    } else if (status.isDenied) {
-      print("❌ Location permission denied");
-    } else if (status.isPermanentlyDenied) {
-      print("⚠️ Permanently denied");
+    if (status.isPermanentlyDenied) {
       openAppSettings();
     }
   }
 
   Future<Position?> getUserLocation() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    bool serviceEnabled =
+        await Geolocator.isLocationServiceEnabled();
 
     if (!serviceEnabled) {
-      print("Location services OFF");
       return null;
     }
 
-    LocationPermission permission = await Geolocator.checkPermission();
+    LocationPermission permission =
+        await Geolocator.checkPermission();
 
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
 
     if (permission == LocationPermission.deniedForever) {
-      print("Permission permanently denied");
       return null;
     }
 
@@ -94,114 +100,112 @@ class _WebViewScreenState extends State<WebViewScreen> {
     );
   }
 
-  @override
-  void initState() {
-    super.initState();
-
-    requestLocationPermission();
-
-    late final PlatformWebViewControllerCreationParams params;
-
-    if (WebViewPlatform.instance is AndroidWebViewPlatform) {
-  params = AndroidWebViewControllerCreationParams();
-} else {
-  params = WebKitWebViewControllerCreationParams(
-    allowsInlineMediaPlayback: true,
-    mediaTypesRequiringUserAction: const <PlaybackMediaTypes>{},
-  );
-}
-
-    controller = WebViewController.fromPlatformCreationParams(params)
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-            onPageFinished: (url) async {
-              print("🌐 Page loaded: $url");
-
-              final position = await getUserLocation();
-
-              if (position != null) {
-                await controller.runJavaScript("""
-      window.__flutterLat = ${position.latitude};
-      window.__flutterLng = ${position.longitude};
-    """);
-              }
-
-              // 🔥 OVERRIDE GEOLOCATION (KEY FIX)
-              await controller.runJavaScript("""
-    navigator.geolocation.getCurrentPosition = function(success, error) {
-        success({
-            coords: {
-                latitude: window.__flutterLat || 0,
-                longitude: window.__flutterLng || 0
-            }
-        });
-    };
-  """);
-
-              // keep your token logic
-              FirebaseMessaging messaging = FirebaseMessaging.instance;
-              String? token = await messaging.getToken();
-
-              if (token != null) {
-                await controller.runJavaScript(
-                  "localStorage.setItem('fcm_token', '$token');",
-                );
-              }
-            }
-        ), // 👈 THIS WAS MISSING
-      )
-      ..loadRequest(Uri.parse('https://hrm.felicitysolar.ng/login'));
-    // 👇 ADD IT HERE (directly below controller creation)
-    if (controller.platform is AndroidWebViewController) {
-      final androidController = controller.platform as AndroidWebViewController;
-
-      androidController.setGeolocationEnabled(true);
-      androidController.setMediaPlaybackRequiresUserGesture(false);
-      androidController.enableZoom(false);
-
-      androidController.setOnPlatformPermissionRequest(
-            (request) {
-          request.grant(); // 🔥 THIS is the real fix
-        },
-      );
-    }
-
-    globalController = controller;
-
-    initFirebase();
-  }
-
   Future<void> initFirebase() async {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
 
-    NotificationSettings settings = await messaging.requestPermission();
-    print("🔔 Permission: ${settings.authorizationStatus}");
+    await messaging.requestPermission();
 
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      print("📩 Foreground message: ${message.notification?.title}");
-
-      flutterLocalNotificationsPlugin.show(
-        0,
-        message.notification?.title ?? "Notification",
-        message.notification?.body ?? "",
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'default_channel',
-            'Default Notifications',
-            importance: Importance.max,
-            priority: Priority.high,
+    FirebaseMessaging.onMessage.listen(
+      (RemoteMessage message) {
+        flutterLocalNotificationsPlugin.show(
+          0,
+          message.notification?.title ?? "Notification",
+          message.notification?.body ?? "",
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'default_channel',
+              'Default Notifications',
+              importance: Importance.max,
+              priority: Priority.high,
+            ),
           ),
-        ),
-        payload: message.data['url'] ?? "/dashboard",
-      );
-    });
+          payload: message.data['url'] ??
+              "https://hrm.felicitysolar.ng/dashboard",
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: WebViewWidget(controller: controller),
+    return SafeArea(
+      child: Scaffold(
+        body: InAppWebView(
+          initialUrlRequest: URLRequest(
+            url: WebUri(
+              "https://hrm.felicitysolar.ng/login",
+            ),
+          ),
+
+          initialSettings: InAppWebViewSettings(
+            javaScriptEnabled: true,
+            mediaPlaybackRequiresUserGesture: false,
+            useShouldOverrideUrlLoading: true,
+            allowFileAccessFromFileURLs: true,
+            allowUniversalAccessFromFileURLs: true,
+            allowsInlineMediaPlayback: true,
+            useOnDownloadStart: true,
+          ),
+
+          onWebViewCreated: (webController) {
+            controller = webController;
+            globalController = webController;
+          },
+
+          onLoadStop: (webController, url) async {
+            final position = await getUserLocation();
+
+            if (position != null) {
+              await webController.evaluateJavascript(
+                source: """
+                window.__flutterLat = ${position.latitude};
+                window.__flutterLng = ${position.longitude};
+
+                navigator.geolocation.getCurrentPosition =
+                function(success, error) {
+                  success({
+                    coords: {
+                      latitude: window.__flutterLat || 0,
+                      longitude: window.__flutterLng || 0
+                    }
+                  });
+                };
+                """,
+              );
+            }
+
+            FirebaseMessaging messaging =
+                FirebaseMessaging.instance;
+
+            String? token = await messaging.getToken();
+
+            if (token != null) {
+              await webController.evaluateJavascript(
+                source:
+                    "localStorage.setItem('fcm_token', '$token');",
+              );
+            }
+          },
+
+          onPermissionRequest:
+              (controller, request) async {
+            return PermissionResponse(
+              resources: request.resources,
+              action: PermissionResponseAction.GRANT,
+            );
+          },
+
+          shouldOverrideUrlLoading:
+              (controller, navigationAction) async {
+            return NavigationActionPolicy.ALLOW;
+          },
+
+          onDownloadStartRequest:
+              (controller, request) async {
+            print("Downloading: ${request.url}");
+          },
+        ),
+      ),
     );
   }
 }
