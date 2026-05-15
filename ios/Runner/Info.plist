@@ -88,7 +88,8 @@
 
 <key>NSMicrophoneUsageDescription</key>
 <string>This app may require microphone access for media uploads.</string>
-
+	<key>io.flutter.embedded_views_preview</key>
+	<true/>
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<true/>
 </dict>
