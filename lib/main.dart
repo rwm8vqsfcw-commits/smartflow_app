@@ -1,42 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:geolocator/geolocator.dart';
 
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-InAppWebViewController? globalController; 
-
-void main() async {
+void main() {
+  // Bypassed all asynchronous services to guarantee runApp() executes instantly
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-
-  const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const DarwinInitializationSettings initializationSettingsDarwin = DarwinInitializationSettings(
-    requestAlertPermission: true,
-    requestBadgePermission: true,
-    requestSoundPermission: true,
-  );
-
-  const InitializationSettings initializationSettings = InitializationSettings(
-    android: initializationSettingsAndroid,
-    iOS: initializationSettingsDarwin,
-  );
-
-  await flutterLocalNotificationsPlugin.initialize(
-    initializationSettings,
-    onDidReceiveNotificationResponse: (NotificationResponse response) async {
-      if (response.payload != null && globalController != null) {
-        globalController!.loadUrl(
-          urlRequest: URLRequest(
-            url: WebUri(response.payload!),
-          ),
-        );
-      }
-    },
-  );
   runApp(MyApp());
 }
 
@@ -57,79 +24,25 @@ class WebViewScreen extends StatefulWidget {
 
 class _WebViewScreenState extends State<WebViewScreen> {
   InAppWebViewController? controller;
-  bool _shouldRenderWebView = false; // Flag to delay rendering
+  bool _shouldRenderWebView = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      requestLocationPermission();
-      initFirebase();
-      
-      // CRITICAL FIX FOR IOS WHITE SCREEN: 
-      // Delay mounting the native WKWebView component until the framework layout loop completes.
-      Future.delayed(const Duration(milliseconds: 200), () {
-        if (mounted) {
-          setState(() {
-            _shouldRenderWebView = true;
-          });
-        }
-      });
+    // Short layout delay to prevent iOS transparency rendering bugs
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (mounted) {
+        setState(() {
+          _shouldRenderWebView = true;
+        });
+      }
     });
-  }
-
-  Future<void> requestLocationPermission() async {
-    var status = await Permission.location.request();
-    if (status.isPermanentlyDenied) {
-      openAppSettings();
-    }
-  }
-
-  Future<Position?> getUserLocation() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return null;
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.deniedForever) return null;
-
-    return await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-      timeLimit: const Duration(seconds: 5),
-    );
-  }
-
-  Future<void> initFirebase() async {
-    FirebaseMessaging messaging = FirebaseMessaging.instance;
-    await messaging.requestPermission();
-    
-    FirebaseMessaging.onMessage.listen(
-      (RemoteMessage message) {
-        flutterLocalNotificationsPlugin.show(
-          0,
-          message.notification?.title ?? "Notification",
-          message.notification?.body ?? "",
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'default_channel',
-              'Default Notifications',
-              importance: Importance.max,
-              priority: Priority.high,
-            ),
-            iOS: DarwinNotificationDetails(),
-          ),
-          payload: message.data['url'] ?? "https://felicitysolar.ng",
-        );
-      },
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.blueGrey, // Visually checks if layout collapses or mounts correctly
+      backgroundColor: Colors.blueGrey, 
       body: !_shouldRenderWebView
           ? const Center(
               child: CircularProgressIndicator(
@@ -153,68 +66,15 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 ),
                 onWebViewCreated: (webController) {
                   controller = webController;
-                  globalController = webController;
                 },
                 onReceivedError: (webController, request, error) {
                   showDialog(
                     context: context,
-                    barrierDismissible: true,
                     builder: (context) => AlertDialog(
                       title: const Text("WebView Network Error"),
-                      content: Text("Code: ${error.type}\n\nMessage: ${error.description}\n\nURL: ${request.url}"),
-                      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Dismiss"))],
+                      content: Text("Code: ${error.type}\n\nMessage: ${error.description}"),
                     ),
                   );
-                },
-                onConsoleMessage: (webController, consoleMessage) {
-                  if (consoleMessage.messageLevel == ConsoleMessageLevel.ERROR) {
-                    showDialog(
-                      context: context,
-                      barrierDismissible: true,
-                      builder: (context) => AlertDialog(
-                        title: const Text("JS Console Error"),
-                        content: Text(consoleMessage.message),
-                        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Dismiss"))],
-                      ),
-                    );
-                  }
-                },
-                onLoadStop: (webController, url) async {
-                  getUserLocation().then((position) async {
-                    if (position != null) {
-                      await webController.evaluateJavascript(
-                        source: """
-                          window.__flutterLat = ${position.latitude};
-                          window.__flutterLng = ${position.longitude};
-                          navigator.geolocation.getCurrentPosition = function(success, error) {
-                            success({ coords: { latitude: window.__flutterLat || 0, longitude: window.__flutterLng || 0 } });
-                          };
-                        """,
-                      );
-                    }
-                  }).catchError((e) {
-                    print("Location error: \$e");
-                  });
-
-                  FirebaseMessaging.instance.getToken().then((token) async {
-                    if (token != null) {
-                      await webController.evaluateJavascript(
-                        source: "localStorage.setItem('fcm_token', '$token');",
-                      );
-                    }
-                  });
-                },
-                onPermissionRequest: (controller, request) async {
-                  return PermissionResponse(
-                    resources: request.resources,
-                    action: PermissionResponseAction.GRANT,
-                  );
-                },
-                shouldOverrideUrlLoading: (controller, navigationAction) async {
-                  return NavigationActionPolicy.ALLOW;
-                },
-                onDownloadStartRequest: (controller, request) async {
-                  print("Downloading: ${request.url}");
                 },
               ),
             ),
