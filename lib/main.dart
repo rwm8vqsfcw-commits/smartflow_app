@@ -7,7 +7,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-// Changed from late to nullable to prevent silent crashes
 InAppWebViewController? globalController; 
 
 void main() async {
@@ -15,8 +14,6 @@ void main() async {
   await Firebase.initializeApp();
 
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
-  
-  // CRITICAL: iOS requires Darwin initialization settings configured explicitly
   const DarwinInitializationSettings initializationSettingsDarwin = DarwinInitializationSettings(
     requestAlertPermission: true,
     requestBadgePermission: true,
@@ -64,7 +61,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
   @override
   void initState() {
     super.initState();
-    // Wrap permissions in post frame to avoid breaking UI initialization threads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       requestLocationPermission();
       initFirebase();
@@ -90,7 +86,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
     return await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
-      timeLimit: const Duration(seconds: 5), // Added timeout fallback
+      timeLimit: const Duration(seconds: 5),
     );
   }
 
@@ -121,7 +117,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold( // Removed SafeArea boundary wrapping to avoid zero-height webview errors
+    return Scaffold(
       body: InAppWebView(
         initialUrlRequest: URLRequest(
           url: WebUri("https://hrm.felicitysolar.ng/login"),
@@ -134,14 +130,43 @@ class _WebViewScreenState extends State<WebViewScreen> {
           allowUniversalAccessFromFileURLs: true,
           allowsInlineMediaPlayback: true,
           useOnDownloadStart: true,
+          // CRITICAL FIX: Forces the WebView container to impersonate standard iOS Safari mobile
+          userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
         ),
         onWebViewCreated: (webController) {
           controller = webController;
           globalController = webController;
         },
+        
+        // 1. DIAGNOSTIC: Captures native iOS network stack/security failures
+        onReceivedError: (webController, request, error) {
+          showDialog(
+            context: context,
+            barrierDismissible: true,
+            builder: (context) => AlertDialog(
+              title: const Text("WebView Network Error"),
+              content: Text("Code: ${error.type}\n\nMessage: ${error.description}\n\nURL: ${request.url}"),
+              actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Dismiss"))],
+            ),
+          );
+        },
+
+        // 2. DIAGNOSTIC: Captures JavaScript run-time execution crashes on screen
+        onConsoleMessage: (webController, consoleMessage) {
+          if (consoleMessage.messageLevel == ConsoleMessageLevel.ERROR) {
+            showDialog(
+              context: context,
+              barrierDismissible: true,
+              builder: (context) => AlertDialog(
+                title: const Text("JS Console Error"),
+                content: Text(consoleMessage.message),
+                actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Dismiss"))],
+              ),
+            );
+          }
+        },
+
         onLoadStop: (webController, url) async {
-          // CRITICAL: Removed blocking await. Fetch location asynchronously 
-          // so the UI thread doesn't halt and draw a white canvas.
           getUserLocation().then((position) async {
             if (position != null) {
               await webController.evaluateJavascript(
@@ -155,11 +180,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
               );
             }
           }).catchError((e) {
-  print("Location error: \$e");
-});
+            print("Location error: \$e");
+          });
 
-
-          // Token processing
           FirebaseMessaging.instance.getToken().then((token) async {
             if (token != null) {
               await webController.evaluateJavascript(
