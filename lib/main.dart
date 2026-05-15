@@ -42,6 +42,8 @@ void main() async {
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key}); // Added key parameter
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -52,6 +54,8 @@ class MyApp extends StatelessWidget {
 }
 
 class WebViewScreen extends StatefulWidget {
+  const WebViewScreen({super.key}); // Added key parameter
+
   @override
   State<WebViewScreen> createState() => _WebViewScreenState();
 }
@@ -143,7 +147,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     allowUniversalAccessFromFileURLs: true,
                     allowsInlineMediaPlayback: true,
                     useOnDownloadStart: true,
-                    setSupportMultipleWindows: true, 
+                    supportMultipleWindows: true, // FIXED PROPERTY NAME
                     javaScriptCanOpenWindowsAutomatically: true,
                     userAgent: Platform.isIOS
                         ? "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
@@ -161,13 +165,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
                   onReceivedError: (webController, request, error) {
                     if (error.type == WebResourceErrorType.CANCELLED) return;
-                    print("WebView Error: ${error.description}");
                   },
 
-                  onConsoleMessage: (webController, consoleMessage) {
-                    if (consoleMessage.message.contains("Notification is not defined")) return;
-                    print("JS Console: ${consoleMessage.message}");
-                  },
+                  onConsoleMessage: (webController, consoleMessage) {},
 
                   onLoadStop: (webController, url) async {
                     await webController.evaluateJavascript(
@@ -195,7 +195,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           """,
                         );
                       }
-                    }).catchError((e) => print("Location error: \$e"));
+                    }).catchError((e) {
+                      return null; // FIXED RETURN TYPE EXCEPTION
+                    });
 
                     FirebaseMessaging.instance.getToken().then((token) async {
                       if (token != null) {
@@ -214,9 +216,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   shouldOverrideUrlLoading: (controller, navigationAction) async {
                     return NavigationActionPolicy.ALLOW;
                   },
-                  onDownloadStartRequest: (controller, request) async {
-                    print("Downloading: ${request.url}");
-                  },
+                  onDownloadStartRequest: (controller, request) async {},
                 ),
               ),
       ),
