@@ -1,4 +1,3 @@
-import 'dart:io'; 
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -6,31 +5,31 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+FlutterLocalNotificationsPlugin();
 
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-InAppWebViewController? globalController; 
+late InAppWebViewController globalController;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await Firebase.initializeApp();
 
-  const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const DarwinInitializationSettings initializationSettingsDarwin = DarwinInitializationSettings(
-    requestAlertPermission: true,
-    requestBadgePermission: true,
-    requestSoundPermission: true,
-  );
+  const AndroidInitializationSettings initializationSettingsAndroid =
+  AndroidInitializationSettings('@mipmap/ic_launcher');
 
-  const InitializationSettings initializationSettings = InitializationSettings(
+  const InitializationSettings initializationSettings =
+  InitializationSettings(
     android: initializationSettingsAndroid,
-    iOS: initializationSettingsDarwin,
   );
 
   await flutterLocalNotificationsPlugin.initialize(
     initializationSettings,
-    onDidReceiveNotificationResponse: (NotificationResponse response) async {
-      if (response.payload != null && globalController != null) {
-        globalController!.loadUrl(
+    onDidReceiveNotificationResponse:
+        (NotificationResponse response) async {
+      if (response.payload != null) {
+        globalController.loadUrl(
           urlRequest: URLRequest(
             url: WebUri(response.payload!),
           ),
@@ -38,12 +37,11 @@ void main() async {
       }
     },
   );
+
   runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key}); // Added key parameter
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -54,61 +52,62 @@ class MyApp extends StatelessWidget {
 }
 
 class WebViewScreen extends StatefulWidget {
-  const WebViewScreen({super.key}); // Added key parameter
-
   @override
   State<WebViewScreen> createState() => _WebViewScreenState();
 }
 
 class _WebViewScreenState extends State<WebViewScreen> {
+  bool isLoading = true;
   InAppWebViewController? controller;
-  bool _shouldRenderWebView = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      requestLocationPermission();
-      initFirebase();
-      Future.delayed(const Duration(milliseconds: 200), () {
-        if (mounted) {
-          setState(() {
-            _shouldRenderWebView = true;
-          });
-        }
-      });
-    });
+
+    requestLocationPermission();
+
+    initFirebase();
   }
 
   Future<void> requestLocationPermission() async {
     var status = await Permission.location.request();
+
     if (status.isPermanentlyDenied) {
       openAppSettings();
     }
   }
 
   Future<Position?> getUserLocation() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return null;
+    bool serviceEnabled =
+    await Geolocator.isLocationServiceEnabled();
 
-    LocationPermission permission = await Geolocator.checkPermission();
+    if (!serviceEnabled) {
+      return null;
+    }
+
+    LocationPermission permission =
+    await Geolocator.checkPermission();
+
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-    if (permission == LocationPermission.deniedForever) return null;
+
+    if (permission == LocationPermission.deniedForever) {
+      return null;
+    }
 
     return await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
-      timeLimit: const Duration(seconds: 5),
     );
   }
 
   Future<void> initFirebase() async {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
+
     await messaging.requestPermission();
-    
+
     FirebaseMessaging.onMessage.listen(
-      (RemoteMessage message) {
+          (RemoteMessage message) {
         flutterLocalNotificationsPlugin.show(
           0,
           message.notification?.title ?? "Notification",
@@ -120,9 +119,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
               importance: Importance.max,
               priority: Priority.high,
             ),
-            iOS: DarwinNotificationDetails(),
           ),
-          payload: message.data['url'] ?? "https://felicitysolar.ng",
+          payload: message.data['url'] ??
+              "https://hrm.felicitysolar.ng/dashboard",
         );
       },
     );
@@ -130,95 +129,163 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: !_shouldRenderWebView
-            ? const Center(child: CircularProgressIndicator(color: Colors.blueGrey))
-            : SizedBox.expand(
-                child: InAppWebView(
-                  initialUrlRequest: URLRequest(
-                    url: WebUri("https://felicitysolar.ng"),
-                  ),
-                  initialSettings: InAppWebViewSettings(
-                    javaScriptEnabled: true,
-                    mediaPlaybackRequiresUserGesture: false,
-                    useShouldOverrideUrlLoading: true,
-                    allowFileAccessFromFileURLs: true,
-                    allowUniversalAccessFromFileURLs: true,
-                    allowsInlineMediaPlayback: true,
-                    useOnDownloadStart: true,
-                    supportMultipleWindows: true, // FIXED PROPERTY NAME
-                    javaScriptCanOpenWindowsAutomatically: true,
-                    userAgent: Platform.isIOS
-                        ? "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
-                        : "Mozilla/5.0 (Linux; Android 13; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36",
-                  ),
-                  onWebViewCreated: (webController) {
-                    controller = webController;
-                    globalController = webController;
-                  },
-                  
-                  onCreateWindow: (webController, createWindowAction) async {
-                    webController.loadUrl(urlRequest: createWindowAction.request);
-                    return true;
-                  },
+    return SafeArea(
+      child: Scaffold(
+        body: Stack(
+          children: [
 
-                  onReceivedError: (webController, request, error) {
-                    if (error.type == WebResourceErrorType.CANCELLED) return;
-                  },
-
-                  onConsoleMessage: (webController, consoleMessage) {},
-
-                  onLoadStop: (webController, url) async {
-                    await webController.evaluateJavascript(
-                      source: """
-                        if (typeof window.Notification === 'undefined') {
-                          window.Notification = {
-                            permission: 'granted',
-                            requestPermission: function() {
-                              return Promise.resolve('granted');
-                            }
-                          };
-                        }
-                      """,
-                    );
-
-                    getUserLocation().then((position) async {
-                      if (position != null) {
-                        await webController.evaluateJavascript(
-                          source: """
-                            window.__flutterLat = ${position.latitude};
-                            window.__flutterLng = ${position.longitude};
-                            navigator.geolocation.getCurrentPosition = function(success, error) {
-                              success({ coords: { latitude: window.__flutterLat || 0, longitude: window.__flutterLng || 0 } });
-                            };
-                          """,
-                        );
-                      }
-                    }).catchError((e) {
-                      return null; // FIXED RETURN TYPE EXCEPTION
-                    });
-
-                    FirebaseMessaging.instance.getToken().then((token) async {
-                      if (token != null) {
-                        await webController.evaluateJavascript(
-                          source: "localStorage.setItem('fcm_token', '$token');",
-                        );
-                      }
-                    });
-                  },
-                  onPermissionRequest: (controller, request) async {
-                    return PermissionResponse(
-                      resources: request.resources,
-                      action: PermissionResponseAction.GRANT,
-                    );
-                  },
-                  shouldOverrideUrlLoading: (controller, navigationAction) async {
-                    return NavigationActionPolicy.ALLOW;
-                  },
-                  onDownloadStartRequest: (controller, request) async {},
+            InAppWebView(
+              initialUrlRequest: URLRequest(
+                url: WebUri(
+                  "https://hrm.felicitysolar.ng/login",
                 ),
               ),
+
+              initialSettings: InAppWebViewSettings(
+                javaScriptEnabled: true,
+                mediaPlaybackRequiresUserGesture: false,
+                useShouldOverrideUrlLoading: true,
+                allowFileAccessFromFileURLs: true,
+                allowUniversalAccessFromFileURLs: true,
+                allowsInlineMediaPlayback: true,
+                useOnDownloadStart: true,
+              ),
+
+              onWebViewCreated: (webController) {
+                controller = webController;
+                globalController = webController;
+              },
+
+              onLoadStart: (controller, url) {
+                setState(() {
+                  isLoading = true;
+                });
+              },
+
+              onLoadStop: (webController, url) async {
+                setState(() {
+                  isLoading = false;
+                });
+
+                final position = await getUserLocation();
+
+                if (position != null) {
+                  await webController.evaluateJavascript(
+                    source: """
+                  window.__flutterLat = ${position.latitude};
+                  window.__flutterLng = ${position.longitude};
+
+                  navigator.geolocation.getCurrentPosition =
+                  function(success, error) {
+                    success({
+                      coords: {
+                        latitude: window.__flutterLat || 0,
+                        longitude: window.__flutterLng || 0
+                      }
+                    });
+                  };
+                  """,
+                  );
+                }
+
+                FirebaseMessaging messaging =
+                    FirebaseMessaging.instance;
+
+                String? token = await messaging.getToken();
+
+                if (token != null) {
+                  await webController.evaluateJavascript(
+                    source:
+                    "localStorage.setItem('fcm_token', '$token');",
+                  );
+                }
+              },
+
+              onPermissionRequest:
+                  (controller, request) async {
+                return PermissionResponse(
+                  resources: request.resources,
+                  action: PermissionResponseAction.GRANT,
+                );
+              },
+
+              shouldOverrideUrlLoading:
+                  (controller, navigationAction) async {
+
+                final uri = navigationAction.request.url;
+
+                if (uri != null) {
+
+                  String url = uri.toString();
+
+                  if (
+                  url.toLowerCase().endsWith(".pdf") ||
+                      url.toLowerCase().endsWith(".doc") ||
+                      url.toLowerCase().endsWith(".docx") ||
+                      url.toLowerCase().endsWith(".xls") ||
+                      url.toLowerCase().endsWith(".xlsx") ||
+                      url.contains("/storage/")
+                  ) {
+
+                    await launchUrl(
+                      Uri.parse(url),
+                      mode: LaunchMode.externalApplication,
+                    );
+
+                    return NavigationActionPolicy.CANCEL;
+                  }
+                }
+
+                return NavigationActionPolicy.ALLOW;
+              },
+
+                onDownloadStartRequest:
+                    (controller, request) async {
+
+                  final url = request.url.toString();
+
+                  await launchUrl(
+                    Uri.parse(url),
+                    mode: LaunchMode.externalApplication,
+                  );
+                },
+            ),
+
+            if (isLoading)
+              Container(
+                color: Colors.white,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment:
+                    MainAxisAlignment.center,
+                    children: [
+
+                      Image.asset(
+                        'assets/icon.png',
+                        width: 120,
+                      ),
+
+                      SizedBox(height: 20),
+
+                      CircularProgressIndicator(),
+
+                      SizedBox(height: 15),
+
+                      Text(
+                        "Loading Smartflow...",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+
+                    ],
+                  ),
+                ),
+              ),
+
+          ],
+        ),
       ),
     );
   }
