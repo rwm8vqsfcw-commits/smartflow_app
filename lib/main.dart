@@ -57,7 +57,11 @@ class WebViewScreen extends StatefulWidget {
 }
 
 class _WebViewScreenState extends State<WebViewScreen> {
+
   bool isLoading = true;
+  bool hasError = false;
+  String errorMessage = "";
+
   InAppWebViewController? controller;
 
   @override
@@ -167,6 +171,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   isLoading = false;
                 });
 
+
                 final position = await getUserLocation();
 
                 if (position != null) {
@@ -200,6 +205,28 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   );
                 }
               },
+
+              onReceivedError: (controller, request, error) {
+
+                setState(() {
+                  hasError = true;
+                  errorMessage =
+                  "ERROR: ${error.description}";
+                });
+
+              },
+
+              onReceivedHttpError:
+                  (controller, request, response) async {
+
+                setState(() {
+                  hasError = true;
+                  errorMessage =
+                  "HTTP ERROR: ${response.statusCode}";
+                });
+
+              },
+
 
               onPermissionRequest:
                   (controller, request) async {
@@ -250,6 +277,40 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   );
                 },
             ),
+
+            if (hasError)
+              Container(
+                color: Colors.white,
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisAlignment:
+                      MainAxisAlignment.center,
+                      children: [
+
+                        Icon(
+                          Icons.error,
+                          color: Colors.red,
+                          size: 60,
+                        ),
+
+                        SizedBox(height: 20),
+
+                        Text(
+                          errorMessage,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.black,
+                          ),
+                        ),
+
+                      ],
+                    ),
+                  ),
+                ),
+              ),
 
             if (isLoading)
               Container(
