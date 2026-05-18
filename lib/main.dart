@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+//import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -70,7 +70,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
     requestLocationPermission();
 
-    initFirebase();
+   // initFirebase();
   }
 
   Future<void> requestLocationPermission() async {
@@ -105,6 +105,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
     );
   }
 
+/*
   Future<void> initFirebase() async {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
 
@@ -130,6 +131,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
       },
     );
   }
+  */
+
 
   @override
   Widget build(BuildContext context) {
@@ -192,19 +195,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   """,
                   );
                 }
-
-                FirebaseMessaging messaging =
-                    FirebaseMessaging.instance;
-
-                String? token = await messaging.getToken();
-
-                if (token != null) {
-                  await webController.evaluateJavascript(
-                    source:
-                    "localStorage.setItem('fcm_token', '$token');",
-                  );
-                }
               },
+
+
 
               onReceivedError: (controller, request, error) {
 
