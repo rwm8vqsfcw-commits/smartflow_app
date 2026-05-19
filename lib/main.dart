@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'dart:io';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
-void main() {
+void main() async {
+
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp();
+
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-
   const MyApp({super.key});
 
   @override
@@ -34,82 +38,63 @@ class _WebViewScreenState
   late final WebViewController controller;
 
   bool isLoading = true;
-  bool firstLoad = true;
 
   @override
   void initState() {
     super.initState();
-    if (Platform.isIOS) {
-      WebViewPlatform.instance;
-    }
+
+    FirebaseMessaging messaging =
+        FirebaseMessaging.instance;
+
+    messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
 
     controller = WebViewController()
-      ..enableZoom(false)
       ..setJavaScriptMode(
         JavaScriptMode.unrestricted,
       )
+      ..setUserAgent(
+          "SMARTFLOW_APP"
+      )
       ..setNavigationDelegate(
-
         NavigationDelegate(
 
-          onWebResourceError: (error) {
-
-            print(
-                "WEBVIEW ERROR: ${error.description}"
-            );
-
+          onPageStarted: (url) {
+            setState(() {
+              isLoading = true;
+            });
           },
 
           onPageFinished: (url) async {
 
-            await Future.delayed(
-              Duration(milliseconds: 500),
-            );
+            setState(() {
+              isLoading = false;
+            });
 
+            String? token =
+            await FirebaseMessaging.instance.getToken();
 
+            if (token != null) {
 
-            if (firstLoad) {
-
-              setState(() {
-                isLoading = false;
-              });
-
-              firstLoad = false;
-            }
-          },
-
-          onNavigationRequest:
-              (NavigationRequest request) async {
-
-             {
-              return NavigationDecision.prevent;
-            }
-
-            final url = request.url.toLowerCase();
-
-            if (
-            url.contains('.pdf') ||
-                url.contains('.doc') ||
-                url.contains('.docx') ||
-                url.contains('.xls') ||
-                url.contains('.xlsx') ||
-                url.contains('/storage/') ||
-                url.contains('/download/')
-            ) {
-
-              await launchUrl(
-                Uri.parse(request.url),
-                mode: LaunchMode.externalApplication,
+              await controller.runJavaScript(
+                  """
+      localStorage.setItem(
+        'fcm_token',
+        '$token'
+      );
+      """
               );
 
-              return NavigationDecision.prevent;
             }
 
-            return NavigationDecision.navigate;
           },
-
-        ),
+      ),
       )
+
       ..loadRequest(
         Uri.parse(
           "https://hrm.felicitysolar.ng/login",
