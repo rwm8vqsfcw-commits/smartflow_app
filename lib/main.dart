@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(const MyApp());
@@ -50,9 +51,51 @@ class _WebViewScreenState
           },
 
           onPageFinished: (url) {
+
+            controller.runJavaScript(
+                """
+              var buttons = document.querySelectorAll('*');
+
+              buttons.forEach(function(btn) {
+                if (
+                  btn.innerText &&
+                  btn.innerText.toLowerCase().includes('enable notifications')
+                ) {
+                  btn.style.display = 'none';
+                }
+              });
+              """
+            );
+
             setState(() {
               isLoading = false;
             });
+          },
+
+          onNavigationRequest:
+              (NavigationRequest request) async {
+
+            final url = request.url.toLowerCase();
+
+            if (
+            url.contains('.pdf') ||
+                url.contains('.doc') ||
+                url.contains('.docx') ||
+                url.contains('.xls') ||
+                url.contains('.xlsx') ||
+                url.contains('/storage/') ||
+                url.contains('/download/')
+            ) {
+
+              await launchUrl(
+                Uri.parse(request.url),
+                mode: LaunchMode.externalApplication,
+              );
+
+              return NavigationDecision.prevent;
+            }
+
+            return NavigationDecision.navigate;
           },
 
         ),
@@ -68,46 +111,46 @@ class _WebViewScreenState
   Widget build(BuildContext context) {
 
     return SafeArea(
-        child: Scaffold(
-      body: Stack(
-        children: [
+      child: Scaffold(
+        body: Stack(
+          children: [
 
-          WebViewWidget(
-            controller: controller,
-          ),
-
-          if (isLoading)
-            Container(
-              color: Colors.white,
-              child: Center(
-                child: Column(
-                  mainAxisAlignment:
-                  MainAxisAlignment.center,
-                  children: [
-
-                    Image.asset(
-                      'assets/icon.png',
-                      width: 120,
-                    ),
-
-                    SizedBox(height: 20),
-
-                    CircularProgressIndicator(),
-
-                    SizedBox(height: 15),
-
-                    Text(
-                      "Loading Smartflow...",
-                    ),
-
-                  ],
-                ),
-              ),
+            WebViewWidget(
+              controller: controller,
             ),
 
-        ],
-      ),
+            if (isLoading)
+              Container(
+                color: Colors.white,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment:
+                    MainAxisAlignment.center,
+                    children: [
+
+                      Image.asset(
+                        'assets/icon.png',
+                        width: 120,
+                      ),
+
+                      SizedBox(height: 20),
+
+                      CircularProgressIndicator(),
+
+                      SizedBox(height: 15),
+
+                      Text(
+                        "Loading Smartflow...",
+                      ),
+
+                    ],
+                  ),
+                ),
+              ),
+
+          ],
         ),
+      ),
     );
   }
 }
