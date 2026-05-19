@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:firebase_core/firebase_core.dart';
-//import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
 
-
+late InAppWebViewController globalController;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,11 +28,13 @@ void main() async {
     initializationSettings,
     onDidReceiveNotificationResponse:
         (NotificationResponse response) async {
-
       if (response.payload != null) {
-        // notification click
+        globalController.loadUrl(
+          urlRequest: URLRequest(
+            url: WebUri(response.payload!),
+          ),
+        );
       }
-
     },
   );
 
@@ -55,12 +57,8 @@ class WebViewScreen extends StatefulWidget {
 }
 
 class _WebViewScreenState extends State<WebViewScreen> {
-
   bool isLoading = true;
-  bool hasError = false;
-  String errorMessage = "";
-
-  WebViewController? controller;
+  InAppWebViewController? controller;
 
   @override
   void initState() {
@@ -68,7 +66,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
     requestLocationPermission();
 
-    // initFirebase();
+    initFirebase();
   }
 
   Future<void> requestLocationPermission() async {
@@ -103,7 +101,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
     );
   }
 
-/*
   Future<void> initFirebase() async {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
 
@@ -129,109 +126,130 @@ class _WebViewScreenState extends State<WebViewScreen> {
       },
     );
   }
-  */
-
 
   @override
   Widget build(BuildContext context) {
-    controller ??= WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.white)
-      ..setNavigationDelegate(
-
-        NavigationDelegate(
-
-          onPageStarted: (String url) {
-            setState(() {
-              isLoading = true;
-            });
-          },
-
-          onPageFinished: (String url) async {
-            setState(() {
-              isLoading = false;
-            });
-
-            final position = await getUserLocation();
-
-            if (position != null) {
-              controller?.runJavaScript(
-                """
-              window.__flutterLat = ${position.latitude};
-              window.__flutterLng = ${position.longitude};
-
-              navigator.geolocation.getCurrentPosition =
-              function(success, error) {
-                success({
-                  coords: {
-                    latitude: window.__flutterLat || 0,
-                    longitude: window.__flutterLng || 0
-                  }
-                });
-              };
-              """,
-              );
-            }
-          },
-
-          onWebResourceError: (error) {
-            setState(() {
-              hasError = true;
-              errorMessage = error.description;
-            });
-          },
-
-          onNavigationRequest: (NavigationRequest request) async {
-            final url = request.url;
-
-            if (
-            url.toLowerCase().endsWith(".pdf") ||
-                url.toLowerCase().endsWith(".doc") ||
-                url.toLowerCase().endsWith(".docx") ||
-                url.toLowerCase().endsWith(".xls") ||
-                url.toLowerCase().endsWith(".xlsx") ||
-                url.contains("/storage/")
-            ) {
-              await launchUrl(
-                Uri.parse(url),
-                mode: LaunchMode.externalApplication,
-              );
-
-              return NavigationDecision.prevent;
-            }
-
-            return NavigationDecision.navigate;
-          },
-        ),
-      )
-      ..loadRequest(
-        Uri.parse(
-          "https://hrm.felicitysolar.ng/login",
-        ),
-      );
-
     return SafeArea(
       child: Scaffold(
         body: Stack(
           children: [
 
-            WebViewWidget(
-              controller: controller!,
-            ),
-
-            if (hasError)
-              Container(
-                color: Colors.white,
-                child: Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text(
-                      errorMessage,
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
+            InAppWebView(
+              initialUrlRequest: URLRequest(
+                url: WebUri(
+                  "https://hrm.felicitysolar.ng/login",
                 ),
               ),
+
+              initialSettings: InAppWebViewSettings(
+                javaScriptEnabled: true,
+                mediaPlaybackRequiresUserGesture: false,
+                useShouldOverrideUrlLoading: true,
+                allowFileAccessFromFileURLs: true,
+                allowUniversalAccessFromFileURLs: true,
+                allowsInlineMediaPlayback: true,
+                useOnDownloadStart: true,
+              ),
+
+              onWebViewCreated: (webController) {
+                controller = webController;
+                globalController = webController;
+              },
+
+              onLoadStart: (controller, url) {
+                setState(() {
+                  isLoading = true;
+                });
+              },
+
+              onLoadStop: (webController, url) async {
+                setState(() {
+                  isLoading = false;
+                });
+
+                final position = await getUserLocation();
+
+                if (position != null) {
+                  await webController.evaluateJavascript(
+                    source: """
+                  window.__flutterLat = ${position.latitude};
+                  window.__flutterLng = ${position.longitude};
+
+                  navigator.geolocation.getCurrentPosition =
+                  function(success, error) {
+                    success({
+                      coords: {
+                        latitude: window.__flutterLat || 0,
+                        longitude: window.__flutterLng || 0
+                      }
+                    });
+                  };
+                  """,
+                  );
+                }
+
+                FirebaseMessaging messaging =
+                    FirebaseMessaging.instance;
+
+                String? token = await messaging.getToken();
+
+                if (token != null) {
+                  await webController.evaluateJavascript(
+                    source:
+                    "localStorage.setItem('fcm_token', '$token');",
+                  );
+                }
+              },
+
+              onPermissionRequest:
+                  (controller, request) async {
+                return PermissionResponse(
+                  resources: request.resources,
+                  action: PermissionResponseAction.GRANT,
+                );
+              },
+
+              shouldOverrideUrlLoading:
+                  (controller, navigationAction) async {
+
+                final uri = navigationAction.request.url;
+
+                if (uri != null) {
+
+                  String url = uri.toString();
+
+                  if (
+                  url.toLowerCase().endsWith(".pdf") ||
+                      url.toLowerCase().endsWith(".doc") ||
+                      url.toLowerCase().endsWith(".docx") ||
+                      url.toLowerCase().endsWith(".xls") ||
+                      url.toLowerCase().endsWith(".xlsx") ||
+                      url.contains("/storage/")
+                  ) {
+
+                    await launchUrl(
+                      Uri.parse(url),
+                      mode: LaunchMode.externalApplication,
+                    );
+
+                    return NavigationActionPolicy.CANCEL;
+                  }
+                }
+
+                return NavigationActionPolicy.ALLOW;
+              },
+
+                onDownloadStartRequest:
+                    (controller, request) async {
+
+                  final url = request.url.toString();
+
+                  await launchUrl(
+                    Uri.parse(url),
+                    mode: LaunchMode.externalApplication,
+                  );
+                },
+            ),
 
             if (isLoading)
               Container(
@@ -255,6 +273,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
                       Text(
                         "Loading Smartflow...",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
 
                     ],
