@@ -40,12 +40,21 @@ class _WebViewScreenState
     super.initState();
 
     controller = WebViewController()
+      ..enableZoom(false)
       ..setJavaScriptMode(
         JavaScriptMode.unrestricted,
       )
       ..setNavigationDelegate(
 
         NavigationDelegate(
+
+          onWebResourceError: (error) {
+
+            print(
+                "WEBVIEW ERROR: ${error.description}"
+            );
+
+          },
 
           onPageFinished: (url) async {
 
@@ -55,17 +64,17 @@ class _WebViewScreenState
 
             controller.runJavaScript(
                 """
-      var buttons = document.querySelectorAll('*');
+          var buttons = document.querySelectorAll('*');
 
-      buttons.forEach(function(btn) {
-        if (
-          btn.innerText &&
-          btn.innerText.toLowerCase().includes('enable notifications')
-        ) {
-          btn.style.display = 'none';
-        }
-      });
-      """
+          buttons.forEach(function(btn) {
+            if (
+              btn.innerText &&
+              btn.innerText.toLowerCase().includes('enable notifications')
+            ) {
+              btn.style.display = 'none';
+            }
+          });
+          """
             );
 
             if (firstLoad) {
@@ -80,6 +89,12 @@ class _WebViewScreenState
 
           onNavigationRequest:
               (NavigationRequest request) async {
+
+            if (
+            request.url.startsWith('about:blank')
+            ) {
+              return NavigationDecision.prevent;
+            }
 
             final url = request.url.toLowerCase();
 
