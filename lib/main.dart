@@ -7,6 +7,7 @@ void main() {
 }
 
 class MyApp extends StatelessWidget {
+
   const MyApp({super.key});
 
   @override
@@ -32,6 +33,7 @@ class _WebViewScreenState
   late final WebViewController controller;
 
   bool isLoading = true;
+  bool firstLoad = true;
 
   @override
   void initState() {
@@ -42,34 +44,38 @@ class _WebViewScreenState
         JavaScriptMode.unrestricted,
       )
       ..setNavigationDelegate(
+
         NavigationDelegate(
 
-          onPageStarted: (url) {
-            setState(() {
-              isLoading = true;
-            });
-          },
+          onPageFinished: (url) async {
 
-          onPageFinished: (url) {
+            await Future.delayed(
+              Duration(milliseconds: 500),
+            );
 
             controller.runJavaScript(
                 """
-              var buttons = document.querySelectorAll('*');
+      var buttons = document.querySelectorAll('*');
 
-              buttons.forEach(function(btn) {
-                if (
-                  btn.innerText &&
-                  btn.innerText.toLowerCase().includes('enable notifications')
-                ) {
-                  btn.style.display = 'none';
-                }
-              });
-              """
+      buttons.forEach(function(btn) {
+        if (
+          btn.innerText &&
+          btn.innerText.toLowerCase().includes('enable notifications')
+        ) {
+          btn.style.display = 'none';
+        }
+      });
+      """
             );
 
-            setState(() {
-              isLoading = false;
-            });
+            if (firstLoad) {
+
+              setState(() {
+                isLoading = false;
+              });
+
+              firstLoad = false;
+            }
           },
 
           onNavigationRequest:
