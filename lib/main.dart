@@ -67,7 +67,8 @@ class _WebViewScreenState
   @override
   Widget build(BuildContext context) {
 
-    return Scaffold(
+    return SafeArea(
+        child: Scaffold(
       body: Stack(
         children: [
 
@@ -106,6 +107,7 @@ class _WebViewScreenState
 
         ],
       ),
+        ),
     );
   }
 }
