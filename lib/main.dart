@@ -1,14 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 
-void main() async {
-
-  WidgetsFlutterBinding.ensureInitialized();
-
-  await Firebase.initializeApp();
-
+void main() {
   runApp(const MyApp());
 }
 
@@ -43,22 +36,9 @@ class _WebViewScreenState
   void initState() {
     super.initState();
 
-    FirebaseMessaging messaging =
-        FirebaseMessaging.instance;
-
-    messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-
-
     controller = WebViewController()
       ..setJavaScriptMode(
         JavaScriptMode.unrestricted,
-      )
-      ..setUserAgent(
-          "SMARTFLOW_APP"
       )
       ..setNavigationDelegate(
         NavigationDelegate(
@@ -69,32 +49,14 @@ class _WebViewScreenState
             });
           },
 
-          onPageFinished: (url) async {
-
+          onPageFinished: (url) {
             setState(() {
               isLoading = false;
             });
-
-            String? token =
-            await FirebaseMessaging.instance.getToken();
-
-            if (token != null) {
-
-              await controller.runJavaScript(
-                  """
-      localStorage.setItem(
-        'fcm_token',
-        '$token'
-      );
-      """
-              );
-
-            }
-
           },
-      ),
-      )
 
+        ),
+      )
       ..loadRequest(
         Uri.parse(
           "https://hrm.felicitysolar.ng/login",
@@ -107,6 +69,64 @@ class _WebViewScreenState
 
     return SafeArea(
       child: Scaffold(
+
+        floatingActionButton:
+        FloatingActionButton.extended(
+
+          onPressed: () {
+
+            showDialog(
+              context: context,
+              builder: (context) {
+
+                return AlertDialog(
+                  title: Text(
+                    "Enable Notifications",
+                  ),
+
+                  content: Text(
+                    "Allow Smartflow App to send you notifications for approvals, attendance updates and HR alerts.",
+                  ),
+
+                  actions: [
+
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                      child: Text("Cancel"),
+                    ),
+
+                    ElevatedButton(
+                      onPressed: () {
+
+                        Navigator.pop(context);
+
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              "Notification setup coming next.",
+                            ),
+                          ),
+                        );
+                      },
+                      child: Text("Enable"),
+                    ),
+
+                  ],
+                );
+
+              },
+            );
+
+          },
+
+          icon: Icon(Icons.notifications_active),
+
+          label: Text("Notifications"),
+        ),
+
         body: Stack(
           children: [
 
