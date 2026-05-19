@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:io';
 
 void main() {
   runApp(const MyApp());
@@ -38,6 +39,9 @@ class _WebViewScreenState
   @override
   void initState() {
     super.initState();
+    if (Platform.isIOS) {
+      WebViewPlatform.instance;
+    }
 
     controller = WebViewController()
       ..enableZoom(false)
@@ -62,20 +66,7 @@ class _WebViewScreenState
               Duration(milliseconds: 500),
             );
 
-            controller.runJavaScript(
-                """
-          var buttons = document.querySelectorAll('*');
 
-          buttons.forEach(function(btn) {
-            if (
-              btn.innerText &&
-              btn.innerText.toLowerCase().includes('enable notifications')
-            ) {
-              btn.style.display = 'none';
-            }
-          });
-          """
-            );
 
             if (firstLoad) {
 
@@ -90,9 +81,7 @@ class _WebViewScreenState
           onNavigationRequest:
               (NavigationRequest request) async {
 
-            if (
-            request.url.startsWith('about:blank')
-            ) {
+             {
               return NavigationDecision.prevent;
             }
 
