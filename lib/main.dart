@@ -221,20 +221,20 @@ class _WebViewScreenState
                                 ),
                               );
 
-                              print("TOKEN SAVE RESPONSE: ${response.body}");
+                              print("TOKEN SAVE STATUS: ${response.statusCode}");
 
-                              setState(() {
-                                notificationsEnabled = true;
-                              });
+                              print("TOKEN SAVE BODY: ${response.body}");
 
-                              ScaffoldMessenger.of(context)
-                                  .showSnackBar(
+                              ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(
-                                    "Notifications enabled successfully.",
+                                    "SAVE: ${response.statusCode} | ${response.body}",
                                   ),
                                 ),
                               );
+                              setState(() {
+                                notificationsEnabled = true;
+                              });
                             }
 
                           }
