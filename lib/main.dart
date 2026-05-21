@@ -188,6 +188,14 @@ class _WebViewScreenState
 
                             print("FCM TOKEN: $token");
 
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  "TOKEN: ${token ?? 'NULL'}",
+                                ),
+                              ),
+                            );
+
                             if (token != null) {
 
                               await controller.runJavaScript(
