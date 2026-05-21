@@ -44,6 +44,10 @@ class _WebViewScreenState
       ..setJavaScriptMode(
         JavaScriptMode.unrestricted,
       )
+
+      ..setUserAgent(
+          "SMARTFLOW_APP"
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
 
@@ -181,13 +185,13 @@ class _WebViewScreenState
 
                         } catch (e) {
 
-                          print(e);
+                          print("FIREBASE ERROR: $e");
 
                           ScaffoldMessenger.of(context)
                               .showSnackBar(
                             SnackBar(
                               content: Text(
-                                "Notification setup failed.",
+                                "Notification setup failed: $e",
                               ),
                             ),
                           );
