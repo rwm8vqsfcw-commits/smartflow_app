@@ -198,23 +198,16 @@ class _WebViewScreenState
                                 """
                               );
 
-                              await controller.runJavaScript(
-                                  """
-                          fetch('/save-device-token', {
-                            method: 'POST',
-                            headers: {
-                              'Content-Type': 'application/json',
-                              'X-CSRF-TOKEN':
-                                document.querySelector(
-                                  'meta[name="csrf-token"]'
-                                ).content
-                            },
-                            body: JSON.stringify({
-                              token: '$token',
-                              device: 'ios_app'
-                            })
-                          });
-                          """
+                              await controller.loadRequest(
+                                Uri.parse(
+                                    "https://hrm.felicitysolar.ng/save-device-token-app/$token"
+                                ),
+                              );
+
+                              await controller.loadRequest(
+                                Uri.parse(
+                                    "https://hrm.felicitysolar.ng/dashboard"
+                                ),
                               );
 
                               setState(() {
