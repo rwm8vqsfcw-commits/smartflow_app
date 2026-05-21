@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
-void main() {
+void main() async {
+
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp();
+
   runApp(const MyApp());
 }
 
@@ -73,52 +80,82 @@ class _WebViewScreenState
         floatingActionButton:
         FloatingActionButton.extended(
 
-          onPressed: () {
+          onPressed: () async {
 
-            showDialog(
-              context: context,
-              builder: (context) {
 
-                return AlertDialog(
-                  title: Text(
-                    "Enable Notifications",
-                  ),
 
-                  content: Text(
-                    "Allow Smartflow App to send you notifications for approvals, attendance updates and HR alerts.",
-                  ),
+            FirebaseMessaging messaging =
+                FirebaseMessaging.instance;
 
-                  actions: [
+            NotificationSettings settings =
+            await messaging.requestPermission(
+              alert: true,
+              badge: true,
+              sound: true,
+            );
 
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      child: Text("Cancel"),
-                    ),
+            if (
+            settings.authorizationStatus ==
+                AuthorizationStatus.authorized
+            ) {
 
-                    ElevatedButton(
-                      onPressed: () {
+              String? token =
+              await messaging.getToken();
 
-                        Navigator.pop(context);
+              print("FCM TOKEN: $token");
 
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              "Notification setup coming next.",
-                            ),
-                          ),
-                        );
-                      },
-                      child: Text("Enable"),
-                    ),
+              if (token != null) {
 
-                  ],
+                await controller.runJavaScript(
+                  """
+        localStorage.setItem(
+          'fcm_token',
+          '$token'
+        );
+        """,
                 );
 
-              },
-            );
+                await controller.runJavaScript(
+                  """
+        fetch('/save-device-token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN':
+              document.querySelector(
+                'meta[name="csrf-token"]'
+              ).content
+          },
+          body: JSON.stringify({
+            token: '$token',
+            device: 'ios_app'
+          })
+        });
+        """,
+                );
+              }
+
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(
+                SnackBar(
+                  content: Text(
+                    "Notifications enabled successfully.",
+                  ),
+                ),
+              );
+
+            } else {
+
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(
+                SnackBar(
+                  content: Text(
+                    "Notification permission denied.",
+                  ),
+                ),
+              );
+
+            }
 
           },
 
