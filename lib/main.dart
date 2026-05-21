@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(const MyApp());
@@ -50,6 +51,32 @@ class _WebViewScreenState
       )
       ..setNavigationDelegate(
         NavigationDelegate(
+
+          onNavigationRequest:
+              (NavigationRequest request) async {
+
+            final url = request.url.toLowerCase();
+
+            if (
+            url.contains('.pdf') ||
+                url.contains('.doc') ||
+                url.contains('.docx') ||
+                url.contains('.xls') ||
+                url.contains('.xlsx') ||
+                url.contains('/storage/') ||
+                url.contains('/download/')
+            ) {
+
+              await launchUrl(
+                Uri.parse(request.url),
+                mode: LaunchMode.externalApplication,
+              );
+
+              return NavigationDecision.prevent;
+            }
+
+            return NavigationDecision.navigate;
+          },
 
           onPageStarted: (url) {
             setState(() {
@@ -132,6 +159,29 @@ class _WebViewScreenState
                               AuthorizationStatus.authorized
                           ) {
 
+                            await Future.delayed(
+                              Duration(seconds: 3),
+                            );
+
+                            String? apnsToken =
+                            await messaging.getAPNSToken();
+
+                            print("APNS TOKEN: $apnsToken");
+
+                            if (apnsToken == null) {
+
+                              ScaffoldMessenger.of(context)
+                                  .showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    "Still preparing notifications. Please tap again in a few seconds.",
+                                  ),
+                                ),
+                              );
+
+                              return;
+                            }
+
                             String? token =
                             await messaging.getToken();
 
@@ -141,11 +191,11 @@ class _WebViewScreenState
 
                               await controller.runJavaScript(
                                   """
-                          localStorage.setItem(
-                            'fcm_token',
-                            '$token'
-                          );
-                          """
+                                localStorage.setItem(
+                                  'fcm_token',
+                                  '$token'
+                                );
+                                """
                               );
 
                               await controller.runJavaScript(
