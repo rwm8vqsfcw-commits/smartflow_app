@@ -215,44 +215,33 @@ class _WebViewScreenState
                               String userId =
                               userIdResult.toString().replaceAll('"', '');
 
+                              try {
+
                               final response = await http.get(
-                                Uri.parse(
-                                    "https://hrm.felicitysolar.ng/save-device-token-app/$userId/${Uri.encodeComponent(token)}"
-                                ),
+                              Uri.parse(
+                              "https://hrm.felicitysolar.ng/save-device-token-app/$userId/${Uri.encodeComponent(token)}"
+                              ),
                               );
-
-                              print("TOKEN SAVE STATUS: ${response.statusCode}");
-
-                              print("TOKEN SAVE BODY: ${response.body}");
 
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    "SAVE: ${response.statusCode} | ${response.body}",
-                                  ),
-                                ),
-                              );
-                              setState(() {
-                                notificationsEnabled = true;
-                              });
-                            }
-
-                          }
-
-                        } catch (e) {
-
-                          print("FIREBASE ERROR: $e");
-
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(
-                            SnackBar(
+                              SnackBar(
                               content: Text(
-                                "Notification setup failed: $e",
+                              "SAVE: ${response.statusCode}",
                               ),
-                            ),
-                          );
+                              ),
+                              );
 
-                        }
+                              } catch (e) {
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                              content: Text(
+                              "HTTP ERROR: $e",
+                              ),
+                    ),
+                  );
+
+                }
 
                       },
                       child: Text("Enable"),
