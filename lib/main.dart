@@ -3,6 +3,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(const MyApp());
@@ -198,17 +199,21 @@ class _WebViewScreenState
                                 """
                               );
 
-                              await controller.loadRequest(
+                              final userIdResult =
+                              await controller.runJavaScriptReturningResult(
+                                  "localStorage.getItem('logged_user_id');"
+                              );
+
+                              String userId =
+                              userIdResult.toString().replaceAll('"', '');
+
+                              final response = await http.get(
                                 Uri.parse(
-                                    "https://hrm.felicitysolar.ng/save-device-token-app/$token"
+                                    "https://hrm.felicitysolar.ng/save-device-token-app/$userId/$token"
                                 ),
                               );
 
-                              await controller.loadRequest(
-                                Uri.parse(
-                                    "https://hrm.felicitysolar.ng/dashboard"
-                                ),
-                              );
+                              print("TOKEN SAVE RESPONSE: ${response.body}");
 
                               setState(() {
                                 notificationsEnabled = true;
