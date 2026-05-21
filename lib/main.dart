@@ -209,7 +209,7 @@ class _WebViewScreenState
 
                               final response = await http.get(
                                 Uri.parse(
-                                    "https://hrm.felicitysolar.ng/save-device-token-app/$userId/$token"
+                                    "https://hrm.felicitysolar.ng/save-device-token-app/$userId/${Uri.encodeComponent(token)}"
                                 ),
                               );
 
