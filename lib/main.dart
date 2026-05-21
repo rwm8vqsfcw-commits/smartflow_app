@@ -3,12 +3,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-void main() async {
-
-  WidgetsFlutterBinding.ensureInitialized();
-
-  await Firebase.initializeApp();
-
+void main() {
   runApp(const MyApp());
 }
 
@@ -34,6 +29,8 @@ class WebViewScreen extends StatefulWidget {
 
 class _WebViewScreenState
     extends State<WebViewScreen> {
+
+  bool notificationsEnabled = false;
 
   late final WebViewController controller;
 
@@ -78,84 +75,134 @@ class _WebViewScreenState
       child: Scaffold(
 
         floatingActionButton:
-        FloatingActionButton.extended(
 
-          onPressed: () async {
+        notificationsEnabled
+            ? null
+            : FloatingActionButton.extended(
 
+          onPressed: () {
 
+            showDialog(
+              context: context,
+              builder: (context) {
 
-            FirebaseMessaging messaging =
-                FirebaseMessaging.instance;
+                return AlertDialog(
+                  title: Text(
+                    "Enable Notifications",
+                  ),
 
-            NotificationSettings settings =
-            await messaging.requestPermission(
-              alert: true,
-              badge: true,
-              sound: true,
+                  content: Text(
+                    "Allow Smartflow App to send you notifications for approvals, attendance updates and HR alerts.",
+                  ),
+
+                  actions: [
+
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                      child: Text("Cancel"),
+                    ),
+
+                    ElevatedButton(
+                      onPressed: () async {
+
+                        Navigator.pop(context);
+
+                        try {
+
+                          await Firebase.initializeApp();
+
+                          FirebaseMessaging messaging =
+                              FirebaseMessaging.instance;
+
+                          NotificationSettings settings =
+                          await messaging.requestPermission(
+                            alert: true,
+                            badge: true,
+                            sound: true,
+                          );
+
+                          if (
+                          settings.authorizationStatus ==
+                              AuthorizationStatus.authorized
+                          ) {
+
+                            String? token =
+                            await messaging.getToken();
+
+                            print("FCM TOKEN: $token");
+
+                            if (token != null) {
+
+                              await controller.runJavaScript(
+                                  """
+                          localStorage.setItem(
+                            'fcm_token',
+                            '$token'
+                          );
+                          """
+                              );
+
+                              await controller.runJavaScript(
+                                  """
+                          fetch('/save-device-token', {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              'X-CSRF-TOKEN':
+                                document.querySelector(
+                                  'meta[name="csrf-token"]'
+                                ).content
+                            },
+                            body: JSON.stringify({
+                              token: '$token',
+                              device: 'ios_app'
+                            })
+                          });
+                          """
+                              );
+
+                              setState(() {
+                                notificationsEnabled = true;
+                              });
+
+                              ScaffoldMessenger.of(context)
+                                  .showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    "Notifications enabled successfully.",
+                                  ),
+                                ),
+                              );
+                            }
+
+                          }
+
+                        } catch (e) {
+
+                          print(e);
+
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                "Notification setup failed.",
+                              ),
+                            ),
+                          );
+
+                        }
+
+                      },
+                      child: Text("Enable"),
+                    ),
+
+                  ],
+                );
+
+              },
             );
-
-            if (
-            settings.authorizationStatus ==
-                AuthorizationStatus.authorized
-            ) {
-
-              String? token =
-              await messaging.getToken();
-
-              print("FCM TOKEN: $token");
-
-              if (token != null) {
-
-                await controller.runJavaScript(
-                  """
-        localStorage.setItem(
-          'fcm_token',
-          '$token'
-        );
-        """,
-                );
-
-                await controller.runJavaScript(
-                  """
-        fetch('/save-device-token', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN':
-              document.querySelector(
-                'meta[name="csrf-token"]'
-              ).content
-          },
-          body: JSON.stringify({
-            token: '$token',
-            device: 'ios_app'
-          })
-        });
-        """,
-                );
-              }
-
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(
-                SnackBar(
-                  content: Text(
-                    "Notifications enabled successfully.",
-                  ),
-                ),
-              );
-
-            } else {
-
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(
-                SnackBar(
-                  content: Text(
-                    "Notification permission denied.",
-                  ),
-                ),
-              );
-
-            }
 
           },
 
