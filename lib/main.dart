@@ -11,6 +11,13 @@ void main() async {
 
   await Firebase.initializeApp();
 
+  await FirebaseMessaging.instance
+      .setForegroundNotificationPresentationOptions(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
   runApp(const MyApp());
 }
 
@@ -90,10 +97,25 @@ class _WebViewScreenState
             });
           },
 
-          onPageFinished: (url) {
+          onPageFinished: (url) async {
+
             setState(() {
               isLoading = false;
             });
+
+            final enabledResult =
+            await controller.runJavaScriptReturningResult(
+                "localStorage.getItem('notifications_enabled');"
+            );
+
+            if (enabledResult.toString().contains('1')) {
+
+              setState(() {
+                notificationsEnabled = true;
+              });
+
+            }
+
           },
 
         ),
@@ -241,6 +263,10 @@ class _WebViewScreenState
                               setState(() {
                                 notificationsEnabled = true;
                               });
+
+                              await controller.runJavaScript(
+                                  "localStorage.setItem('notifications_enabled', '1');"
+                              );
 
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
