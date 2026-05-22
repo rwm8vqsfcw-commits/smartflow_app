@@ -5,7 +5,12 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 
-void main() {
+void main() async {
+
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp();
+
   runApp(const MyApp());
 }
 
@@ -142,9 +147,6 @@ class _WebViewScreenState
                         Navigator.pop(context);
 
                         try {
-
-                          await Firebase.initializeApp();
-
                           FirebaseMessaging messaging =
                               FirebaseMessaging.instance;
 
