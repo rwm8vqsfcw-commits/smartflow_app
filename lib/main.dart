@@ -150,11 +150,27 @@ class _WebViewScreenState
                           FirebaseMessaging messaging =
                               FirebaseMessaging.instance;
 
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                "STEP 1",
+                              ),
+                            ),
+                          );
+
                           NotificationSettings settings =
                           await messaging.requestPermission(
                             alert: true,
                             badge: true,
                             sound: true,
+                          );
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                "STEP 2: ${settings.authorizationStatus}",
+                              ),
+                            ),
                           );
 
                           if (
@@ -164,6 +180,15 @@ class _WebViewScreenState
 
                             await Future.delayed(
                               Duration(seconds: 3),
+                            );
+
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  "STEP 3",
+                                ),
+                              ),
                             );
 
 
