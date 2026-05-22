@@ -15,53 +15,59 @@ void main() async {
 
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp();
+  if (
+  Platform.isAndroid ||
+      Platform.isIOS
+  ) {
 
-  const AndroidInitializationSettings
-  androidSettings =
-  AndroidInitializationSettings('@mipmap/ic_launcher');
+    await Firebase.initializeApp();
 
-  const InitializationSettings
-  initializationSettings =
-  InitializationSettings(
-    android: androidSettings,
-  );
+    const AndroidInitializationSettings
+    androidSettings =
+    AndroidInitializationSettings('@mipmap/ic_launcher');
 
-  await flutterLocalNotificationsPlugin.initialize(
-    initializationSettings,
-  );
+    const InitializationSettings
+    initializationSettings =
+    InitializationSettings(
+      android: androidSettings,
+    );
 
-  await FirebaseMessaging.instance
-      .setForegroundNotificationPresentationOptions(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
+    await flutterLocalNotificationsPlugin.initialize(
+      initializationSettings,
+    );
 
-  FirebaseMessaging.onMessage.listen(
-        (RemoteMessage message) async {
+    await FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
 
-      if (message.notification != null) {
+    FirebaseMessaging.onMessage.listen(
+          (RemoteMessage message) async {
 
-        await flutterLocalNotificationsPlugin.show(
-          0,
-          message.notification!.title,
-          message.notification!.body,
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'smartflow_channel',
-              'Smartflow Notifications',
-              importance: Importance.max,
-              priority: Priority.high,
+        if (message.notification != null) {
+
+          await flutterLocalNotificationsPlugin.show(
+            0,
+            message.notification!.title,
+            message.notification!.body,
+            const NotificationDetails(
+              android: AndroidNotificationDetails(
+                'smartflow_channel',
+                'Smartflow Notifications',
+                importance: Importance.max,
+                priority: Priority.high,
+              ),
             ),
-          ),
-        );
+          );
 
-      }
+        }
 
-    },
-  );
+      },
+    );
 
+  }
   runApp(const MyApp());
 }
 
