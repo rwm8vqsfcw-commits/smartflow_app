@@ -178,11 +178,6 @@ class _WebViewScreenState
                               AuthorizationStatus.authorized
                           ) {
 
-                            await Future.delayed(
-                              Duration(seconds: 3),
-                            );
-
-
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
