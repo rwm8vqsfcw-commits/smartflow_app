@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 final FlutterLocalNotificationsPlugin
 flutterLocalNotificationsPlugin =
@@ -95,6 +96,12 @@ class _WebViewScreenState
 
   bool androidTokenRegistered = false;
 
+  Future<void> requestLocationPermission() async {
+
+    await Permission.location.request();
+
+  }
+
   void handleNotificationNavigation(
       RemoteMessage message
       ) {
@@ -183,6 +190,10 @@ class _WebViewScreenState
   @override
   void initState() {
     super.initState();
+
+    if (Platform.isAndroid) {
+      requestLocationPermission();
+    }
 
     FirebaseMessaging.onMessageOpenedApp.listen(
       handleNotificationNavigation,
