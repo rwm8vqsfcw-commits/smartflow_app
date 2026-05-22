@@ -4,6 +4,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
+import 'dart:io';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+final FlutterLocalNotificationsPlugin
+flutterLocalNotificationsPlugin =
+FlutterLocalNotificationsPlugin();
 
 void main() async {
 
@@ -11,11 +16,49 @@ void main() async {
 
   await Firebase.initializeApp();
 
+  const AndroidInitializationSettings
+  androidSettings =
+  AndroidInitializationSettings('@mipmap/ic_launcher');
+
+  const InitializationSettings
+  initializationSettings =
+  InitializationSettings(
+    android: androidSettings,
+  );
+
+  await flutterLocalNotificationsPlugin.initialize(
+    initializationSettings,
+  );
+
   await FirebaseMessaging.instance
       .setForegroundNotificationPresentationOptions(
     alert: true,
     badge: true,
     sound: true,
+  );
+
+  FirebaseMessaging.onMessage.listen(
+        (RemoteMessage message) async {
+
+      if (message.notification != null) {
+
+        await flutterLocalNotificationsPlugin.show(
+          0,
+          message.notification!.title,
+          message.notification!.body,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'smartflow_channel',
+              'Smartflow Notifications',
+              importance: Importance.max,
+              priority: Priority.high,
+            ),
+          ),
+        );
+
+      }
+
+    },
   );
 
   runApp(const MyApp());
@@ -50,9 +93,114 @@ class _WebViewScreenState
 
   bool isLoading = true;
 
+  bool androidTokenRegistered = false;
+
+  void handleNotificationNavigation(
+      RemoteMessage message
+      ) {
+
+    final url = message.data['url'];
+
+    if (
+    url != null &&
+        url.toString().isNotEmpty
+    ) {
+
+      Future.delayed(
+        Duration(seconds: 1),
+            () {
+
+          controller.loadRequest(
+            Uri.parse(url),
+          );
+
+        },
+      );
+
+    }
+
+  }
+
+  Future<void> autoRegisterAndroidToken() async {
+
+    try {
+
+      FirebaseMessaging messaging =
+          FirebaseMessaging.instance;
+
+      await messaging.requestPermission();
+
+      String? token =
+      await messaging.getToken();
+
+      print("ANDROID TOKEN: $token");
+
+      if (token != null) {
+
+        await Future.delayed(
+          Duration(seconds: 3),
+        );
+
+        final userIdResult =
+        await controller.runJavaScriptReturningResult(
+            "localStorage.getItem('logged_user_id');"
+        );
+
+        String userId =
+        userIdResult.toString().replaceAll('"', '');
+
+        if (userId.isNotEmpty &&
+            userId != 'null') {
+
+          final response = await http.get(
+            Uri.parse(
+                "https://hrm.felicitysolar.ng/save-device-token-app/$userId/${Uri.encodeComponent(token)}"
+            ),
+          );
+
+          print("ANDROID SAVE: ${response.body}");
+
+          setState(() {
+            notificationsEnabled = true;
+          });
+
+          await controller.runJavaScript(
+              "localStorage.setItem('notifications_enabled', '1');"
+          );
+
+        }
+
+      }
+
+    } catch (e) {
+
+      print("ANDROID TOKEN ERROR: $e");
+
+    }
+
+  }
+
   @override
   void initState() {
     super.initState();
+
+    FirebaseMessaging.onMessageOpenedApp.listen(
+      handleNotificationNavigation,
+    );
+
+    FirebaseMessaging.instance
+        .getInitialMessage()
+        .then((message) {
+
+      if (message != null) {
+
+        handleNotificationNavigation(message);
+
+      }
+
+    });
+
+
 
     controller = WebViewController()
       ..setJavaScriptMode(
@@ -103,12 +251,25 @@ class _WebViewScreenState
               isLoading = false;
             });
 
+            if (
+            Platform.isAndroid &&
+                !androidTokenRegistered
+            ) {
+
+              androidTokenRegistered = true;
+
+              await autoRegisterAndroidToken();
+
+            }
+
             final enabledResult =
             await controller.runJavaScriptReturningResult(
                 "localStorage.getItem('notifications_enabled');"
             );
 
-            if (enabledResult.toString().contains('1')) {
+            if (
+            enabledResult.toString().replaceAll('"', '') == '1'
+            ) {
 
               setState(() {
                 notificationsEnabled = true;
@@ -135,7 +296,9 @@ class _WebViewScreenState
 
         floatingActionButton:
 
-        notificationsEnabled
+        Platform.isAndroid
+            ? null
+            : notificationsEnabled
             ? null
             : FloatingActionButton.extended(
 
@@ -186,6 +349,24 @@ class _WebViewScreenState
                             badge: true,
                             sound: true,
                           );
+                          if (Platform.isIOS) {
+
+                            String? apnsToken;
+
+                            for (int i = 0; i < 10; i++) {
+
+                              apnsToken = await messaging.getAPNSToken();
+
+                              if (apnsToken != null) {
+                                break;
+                              }
+
+                              await Future.delayed(
+                                Duration(seconds: 1),
+                              );
+                            }
+
+                          }
 
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
