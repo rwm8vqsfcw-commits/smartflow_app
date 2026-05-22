@@ -164,24 +164,7 @@ class _WebViewScreenState
                               Duration(seconds: 3),
                             );
 
-                            String? apnsToken =
-                            await messaging.getAPNSToken();
 
-                            print("APNS TOKEN: $apnsToken");
-
-                            if (apnsToken == null) {
-
-                              ScaffoldMessenger.of(context)
-                                  .showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    "Still preparing notifications. Please tap again in a few seconds.",
-                                  ),
-                                ),
-                              );
-
-                              return;
-                            }
 
                             String? token =
                             await messaging.getToken();
