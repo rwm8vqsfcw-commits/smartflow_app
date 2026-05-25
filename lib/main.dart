@@ -434,6 +434,8 @@ class _WebViewScreenState
                 mediaPlaybackRequiresUserGesture: false,
                 allowsInlineMediaPlayback: true,
                 useShouldOverrideUrlLoading: true,
+
+                userAgent: "SMARTFLOW_APP",
               ),
 
               onWebViewCreated:
