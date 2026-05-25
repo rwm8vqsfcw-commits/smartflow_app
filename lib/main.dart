@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -7,6 +7,8 @@ import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:geolocator/geolocator.dart';
+
 final FlutterLocalNotificationsPlugin
 flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
@@ -15,12 +17,9 @@ void main() async {
 
   WidgetsFlutterBinding.ensureInitialized();
 
-  if (
-  Platform.isAndroid ||
-      Platform.isIOS
-  ) {
+  await Firebase.initializeApp();
 
-    await Firebase.initializeApp();
+  if (Platform.isAndroid) {
 
     const AndroidInitializationSettings
     androidSettings =
@@ -36,6 +35,10 @@ void main() async {
       initializationSettings,
     );
 
+  }
+
+  if (Platform.isIOS) {
+
     await FirebaseMessaging.instance
         .setForegroundNotificationPresentationOptions(
       alert: true,
@@ -43,31 +46,32 @@ void main() async {
       sound: true,
     );
 
-    FirebaseMessaging.onMessage.listen(
-          (RemoteMessage message) async {
-
-        if (message.notification != null) {
-
-          await flutterLocalNotificationsPlugin.show(
-            0,
-            message.notification!.title,
-            message.notification!.body,
-            const NotificationDetails(
-              android: AndroidNotificationDetails(
-                'smartflow_channel',
-                'Smartflow Notifications',
-                importance: Importance.max,
-                priority: Priority.high,
-              ),
-            ),
-          );
-
-        }
-
-      },
-    );
-
   }
+
+  FirebaseMessaging.onMessage.listen(
+        (RemoteMessage message) async {
+
+      if (message.notification != null) {
+
+        await flutterLocalNotificationsPlugin.show(
+          0,
+          message.notification!.title,
+          message.notification!.body,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'smartflow_channel',
+              'Smartflow Notifications',
+              importance: Importance.max,
+              priority: Priority.high,
+            ),
+          ),
+        );
+
+      }
+
+    },
+  );
+
   runApp(const MyApp());
 }
 
@@ -96,7 +100,7 @@ class _WebViewScreenState
 
   bool notificationsEnabled = false;
 
-  late final WebViewController controller;
+  InAppWebViewController? controller;
 
   bool isLoading = true;
 
@@ -105,6 +109,32 @@ class _WebViewScreenState
   Future<void> requestLocationPermission() async {
 
     await Permission.location.request();
+
+  }
+
+  Future<Position?> getUserLocation() async {
+
+    bool serviceEnabled =
+    await Geolocator.isLocationServiceEnabled();
+
+    if (!serviceEnabled) {
+      return null;
+    }
+
+    LocationPermission permission =
+    await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      return null;
+    }
+
+    return await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
 
   }
 
@@ -123,8 +153,10 @@ class _WebViewScreenState
         Duration(seconds: 1),
             () {
 
-          controller.loadRequest(
-            Uri.parse(url),
+          controller?.loadUrl(
+            urlRequest: URLRequest(
+              url: WebUri(url),
+            ),
           );
 
         },
@@ -155,19 +187,22 @@ class _WebViewScreenState
         );
 
         final userIdResult =
-        await controller.runJavaScriptReturningResult(
-            "localStorage.getItem('logged_user_id');"
+        await controller?.evaluateJavascript(
+          source:
+          "localStorage.getItem('logged_user_id');",
         );
 
         String userId =
         userIdResult.toString().replaceAll('"', '');
 
-        if (userId.isNotEmpty &&
-            userId != 'null') {
+        if (
+        userId.isNotEmpty &&
+            userId != 'null'
+        ) {
 
           final response = await http.get(
             Uri.parse(
-                "https://hrm.felicitysolar.ng/save-device-token-app/$userId/${Uri.encodeComponent(token)}"
+                "https://hrm.felicitysolar.ng/save-device-token-app/$userId/${Uri.encodeComponent(token)}/android_app"
             ),
           );
 
@@ -177,8 +212,9 @@ class _WebViewScreenState
             notificationsEnabled = true;
           });
 
-          await controller.runJavaScript(
-              "localStorage.setItem('notifications_enabled', '1');"
+          await controller?.evaluateJavascript(
+            source:
+            "localStorage.setItem('notifications_enabled', '1');",
           );
 
         }
@@ -216,93 +252,6 @@ class _WebViewScreenState
       }
 
     });
-
-
-
-    controller = WebViewController()
-      ..setJavaScriptMode(
-        JavaScriptMode.unrestricted,
-      )
-
-      ..setUserAgent(
-          "SMARTFLOW_APP"
-      )
-      ..setNavigationDelegate(
-        NavigationDelegate(
-
-          onNavigationRequest:
-              (NavigationRequest request) async {
-
-            final url = request.url.toLowerCase();
-
-            if (
-            url.contains('.pdf') ||
-                url.contains('.doc') ||
-                url.contains('.docx') ||
-                url.contains('.xls') ||
-                url.contains('.xlsx') ||
-                url.contains('/storage/') ||
-                url.contains('/download/')
-            ) {
-
-              await launchUrl(
-                Uri.parse(request.url),
-                mode: LaunchMode.externalApplication,
-              );
-
-              return NavigationDecision.prevent;
-            }
-
-            return NavigationDecision.navigate;
-          },
-
-          onPageStarted: (url) {
-            setState(() {
-              isLoading = true;
-            });
-          },
-
-          onPageFinished: (url) async {
-
-            setState(() {
-              isLoading = false;
-            });
-
-            if (
-            Platform.isAndroid &&
-                !androidTokenRegistered
-            ) {
-
-              androidTokenRegistered = true;
-
-              await autoRegisterAndroidToken();
-
-            }
-
-            final enabledResult =
-            await controller.runJavaScriptReturningResult(
-                "localStorage.getItem('notifications_enabled');"
-            );
-
-            if (
-            enabledResult.toString().replaceAll('"', '') == '1'
-            ) {
-
-              setState(() {
-                notificationsEnabled = true;
-              });
-
-            }
-
-          },
-
-        ),
-      )
-      ..loadRequest(
-        Uri.parse(
-          "https://hrm.felicitysolar.ng/login",
-        ),
-      );
   }
 
   @override
@@ -349,16 +298,9 @@ class _WebViewScreenState
                         Navigator.pop(context);
 
                         try {
+
                           FirebaseMessaging messaging =
                               FirebaseMessaging.instance;
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                "STEP 1",
-                              ),
-                            ),
-                          );
 
                           NotificationSettings settings =
                           await messaging.requestPermission(
@@ -366,13 +308,15 @@ class _WebViewScreenState
                             badge: true,
                             sound: true,
                           );
+
                           if (Platform.isIOS) {
 
                             String? apnsToken;
 
                             for (int i = 0; i < 10; i++) {
 
-                              apnsToken = await messaging.getAPNSToken();
+                              apnsToken =
+                              await messaging.getAPNSToken();
 
                               if (apnsToken != null) {
                                 break;
@@ -381,97 +325,62 @@ class _WebViewScreenState
                               await Future.delayed(
                                 Duration(seconds: 1),
                               );
+
                             }
 
                           }
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                "STEP 2: ${settings.authorizationStatus}",
-                              ),
-                            ),
-                          );
 
                           if (
                           settings.authorizationStatus ==
                               AuthorizationStatus.authorized
                           ) {
 
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  "STEP 3",
-                                ),
-                              ),
-                            );
-
-
-
                             String? token =
                             await messaging.getToken();
 
-                            print("FCM TOKEN: $token");
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  "TOKEN: ${token ?? 'NULL'}",
-                                ),
-                              ),
-                            );
-
                             if (token != null) {
 
-                              await controller.runJavaScript(
-                                  """
+                              await controller?.evaluateJavascript(
+                                source:
+                                """
                                 localStorage.setItem(
                                   'fcm_token',
                                   '$token'
                                 );
-                                """
+                                """,
                               );
 
                               final userIdResult =
-                              await controller.runJavaScriptReturningResult(
-                                  "localStorage.getItem('logged_user_id');"
+                              await controller?.evaluateJavascript(
+                                source:
+                                "localStorage.getItem('logged_user_id');",
                               );
 
                               String userId =
-                              userIdResult.toString().replaceAll('"', '');
+                              userIdResult.toString()
+                                  .replaceAll('"', '');
 
                               final response = await http.get(
                                 Uri.parse(
-                                    "https://hrm.felicitysolar.ng/save-device-token-app/$userId/${Uri.encodeComponent(token)}"
+                                    "https://hrm.felicitysolar.ng/save-device-token-app/$userId/${Uri.encodeComponent(token)}/ios_app"
                                 ),
                               );
 
-                              print("TOKEN SAVE STATUS: ${response.statusCode}");
+                              print(
+                                  "TOKEN SAVE STATUS: ${response.statusCode}"
+                              );
 
-                              print("TOKEN SAVE BODY: ${response.body}");
-
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    "SAVE: ${response.statusCode} | ${response.body}",
-                                  ),
-                                ),
+                              print(
+                                  "TOKEN SAVE BODY: ${response.body}"
                               );
 
                               setState(() {
                                 notificationsEnabled = true;
                               });
 
-                              await controller.runJavaScript(
-                                  "localStorage.setItem('notifications_enabled', '1');"
-                              );
-
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    "Notifications enabled successfully.",
-                                  ),
-                                ),
+                              await controller?.evaluateJavascript(
+                                source:
+                                "localStorage.setItem('notifications_enabled', '1');",
                               );
 
                             }
@@ -511,8 +420,142 @@ class _WebViewScreenState
         body: Stack(
           children: [
 
-            WebViewWidget(
-              controller: controller,
+            InAppWebView(
+
+              initialUrlRequest: URLRequest(
+                url: WebUri(
+                  "https://hrm.felicitysolar.ng/login",
+                ),
+              ),
+
+              initialSettings: InAppWebViewSettings(
+                javaScriptEnabled: true,
+                geolocationEnabled: true,
+                mediaPlaybackRequiresUserGesture: false,
+                allowsInlineMediaPlayback: true,
+                useShouldOverrideUrlLoading: true,
+              ),
+
+              onWebViewCreated:
+                  (InAppWebViewController webViewController) {
+
+                controller = webViewController;
+
+              },
+
+              onLoadStart: (controller, url) {
+
+                setState(() {
+                  isLoading = true;
+                });
+
+              },
+
+              onLoadStop:
+                  (controller, url) async {
+
+                setState(() {
+                  isLoading = false;
+                });
+
+                final position = await getUserLocation();
+
+                if (position != null) {
+
+                  await controller.evaluateJavascript(
+                    source: """
+                      window.__flutterLat = ${position.latitude};
+                      window.__flutterLng = ${position.longitude};
+                
+                      navigator.geolocation.getCurrentPosition =
+                      function(success, error) {
+                        success({
+                          coords: {
+                            latitude: window.__flutterLat || 0,
+                            longitude: window.__flutterLng || 0
+                          }
+                        });
+                      };
+                    """,
+                  );
+
+                }
+
+                if (
+                Platform.isAndroid &&
+                    !androidTokenRegistered
+                ) {
+
+                  final userIdResult =
+                  await controller.evaluateJavascript(
+                    source:
+                    "localStorage.getItem('logged_user_id');",
+                  );
+
+                  String userId =
+                  userIdResult.toString().replaceAll('"', '');
+
+                  if (
+                  userId.isNotEmpty &&
+                      userId != 'null'
+                  ) {
+
+                    androidTokenRegistered = true;
+
+                    await autoRegisterAndroidToken();
+
+                  }
+
+                }
+
+                final enabledResult =
+                await controller.evaluateJavascript(
+                  source:
+                  "localStorage.getItem('notifications_enabled');",
+                );
+
+                if (
+                enabledResult.toString()
+                    .replaceAll('"', '') ==
+                    '1'
+                ) {
+
+                  setState(() {
+                    notificationsEnabled = true;
+                  });
+
+                }
+
+              },
+
+              shouldOverrideUrlLoading:
+                  (controller, navigationAction) async {
+
+                final url =
+                navigationAction.request.url.toString();
+
+                if (
+                url.contains('.pdf') ||
+                    url.contains('.doc') ||
+                    url.contains('.docx') ||
+                    url.contains('.xls') ||
+                    url.contains('.xlsx') ||
+                    url.contains('/storage/') ||
+                    url.contains('/download/')
+                ) {
+
+                  await launchUrl(
+                    Uri.parse(url),
+                    mode: LaunchMode.externalApplication,
+                  );
+
+                  return NavigationActionPolicy.CANCEL;
+
+                }
+
+                return NavigationActionPolicy.ALLOW;
+
+              },
             ),
 
             if (isLoading)
